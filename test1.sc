@@ -281,6 +281,16 @@ def mergeList(
   numberList(nextNode) = mergeList
 }
 
+def mergeFinalList(
+  oldList: List[List[String]],
+  finalList: List[List[String]]
+): List[List[String]] = {
+  val mergeList = (oldList zip finalList).map {
+    case (l1, l2) => (l1 ++ l2).distinct
+  }
+  mergeList
+}
+
 def checkCondition(
   currentNode:StoredNode,
   nameHashMap:HashMap[StoredNode,String],
@@ -316,11 +326,20 @@ def checkCondition(
   result
 }
 
+def printConstant(
+  numberHashMap: HashMap[String, Int],
+  resultList: List[List[String]]
+): Unit ={
+  numberHashMap.foreach{(key,value) =>
+    println(s"$key -> ${resultList(value)}")
+  }
+}
+
 def conditionalConstant(
   startNode:StoredNode,
   nameHashMap:HashMap[StoredNode,String],
   hashMap:HashMap[StoredNode,  List[StoredNode]]
-):(HashMap[StoredNode, List[List[String]]],HashMap[String, Int]) = {
+):(List[List[String]],HashMap[String, Int]) = {
   val result = HashMap[String, Set[String]]()
   val executableHashMap: HashMap[StoredNode, Boolean] = HashMap()
   val visitedHashMap: HashMap[StoredNode, Boolean] = HashMap()
@@ -334,11 +353,12 @@ def conditionalConstant(
     visitedHashMap += (node -> false)
   }
   executableHashMap(workList.head) = true
+
+  var finalList: List[List[String]] = List.fill(num)(List())
+
   
   workList.foreach{ node =>
     if(executableHashMap(node)){
-      if(nameHashMap(node) == "z = a + b")
-      println(hashMap(node).length)
       if(hashMap(node).length == 1){
         updateList(nameHashMap(node),numberHashMap,numberList,node)
         val nextNode = hashMap(node).head
@@ -346,6 +366,7 @@ def conditionalConstant(
         mergeList(node,nextNode,numberList)
       }else if(hashMap(node).length == 0){
         updateList(nameHashMap(node),numberHashMap,numberList,node)
+        finalList = mergeFinalList(numberList(node),finalList)
       }else{
         checkCondition(node,nameHashMap,hashMap,numberList,numberHashMap).match{
           case 1 =>
@@ -366,61 +387,50 @@ def conditionalConstant(
       }
     }
   }
-  
-  // numberHashMap.foreach{ node=>
-  //   println(node)
-  // }
 
-  // workList.foreach{node =>
-  //   println(nameHashMap(node))
-  //   println(numberList(node))
-  // }
-
-  val lastNode = workList.last
-  val resultList = numberList(lastNode)
-
-  numberHashMap.foreach{(key,value) =>
-    println(s"$key -> ${resultList(value)}")
-  }
     
-  (numberList,numberHashMap)
+  (finalList,numberHashMap)
 }
 
 @main def exec(cpgFile: String, outFile: String) = {
-    importCode(inputPath = cpgFile, projectName = "test")
-    val method = cpg.method("main").next()
-    val cfg = new CfgGenerator().generate(method)
-    val hashMap1 = HashMap[StoredNode,  List[StoredNode]]()
-    val nameHashMap = HashMap[StoredNode,String]()
+  importCode(inputPath = cpgFile, projectName = "test")
+  // Get the main function
+  val method = cpg.method("main").next()
+  val cfg = new CfgGenerator().generate(method)
+  val hashMap1 = HashMap[StoredNode,  List[StoredNode]]()
+  val nameHashMap = HashMap[StoredNode,String]()
 
-    cfg.edges.foreach{edge =>
-      val srcNode = edge.src
-      nameHashMap.get(srcNode) match{
-        case Some(src) =>
-        case None =>
-          nameHashMap(srcNode) = getNode(srcNode)
-      }
-
-      hashMap1.get(srcNode) match {
-        case Some(nodes) =>
-          val updateNodes = nodes :+ edge.dst
-          hashMap1(srcNode) = updateNodes
-        case None =>
-          val newValue = List(edge.dst)
-          hashMap1(srcNode) = newValue
-        }
+  cfg.edges.foreach{edge =>
+    val srcNode = edge.src
+    val dstNode = edge.dst
+    nameHashMap.get(srcNode) match{
+      case Some(src) =>
+      case None =>
+        nameHashMap(srcNode) = getNode(srcNode)
     }
 
-    val startNode:StoredNode = findStartNode(nameHashMap,hashMap1)
-    val newHashMap = HashMap[StoredNode,  List[StoredNode]]()
-    val hashMap = generateHashMap(startNode,nameHashMap,hashMap1,newHashMap)
-    val (numberList,numberHashMap) = conditionalConstant(startNode,nameHashMap,hashMap)
-    // numberList.foreach{(key,resultList) =>
-    //   println(nameHashMap(key))
-    //   numberHashMap.foreach{(key,value) =>
-    //     println(s"$key -> ${resultList(value)}")
-    //   }
+    nameHashMap.get(dstNode) match{
+      case Some(src) =>
+      case None =>
+        nameHashMap(dstNode) = getNode(dstNode)
+    }
 
+    hashMap1.get(srcNode) match {
+      case Some(nodes) =>
+        val updateNodes = nodes :+ edge.dst
+        hashMap1(srcNode) = updateNodes
+      case None =>
+        val newValue = List(edge.dst)
+        hashMap1(srcNode) = newValue
+      }
+  }
 
-    // }
+  val startNode:StoredNode = findStartNode(nameHashMap,hashMap1)
+  val newHashMap = HashMap[StoredNode,  List[StoredNode]]()
+  val hashMap = generateHashMap(startNode,nameHashMap,hashMap1,newHashMap)
+  val (finalList,numberHashMap) = conditionalConstant(startNode,nameHashMap,hashMap)
+  printConstant(numberHashMap,finalList)
+  // numberHashMap.foreach{(key,value) =>
+  //   println(s"$key -> ${finalList(value)}")
+  // }
 }
