@@ -2,7 +2,7 @@ import io.shiftleft.codepropertygraph.generated.EdgeTypes
 import io.shiftleft.codepropertygraph.generated.nodes.*
 import io.shiftleft.semanticcpg.dotgenerator.DotSerializer.{Edge, Graph}
 import io.shiftleft.semanticcpg.language.*
-import io.shiftleft.codepropertygraph.generated.nodes.{Block,ControlStructure,Call,Identifier,Literal,Method,MethodReturn,Return,StoredNode}
+import io.shiftleft.codepropertygraph.generated.nodes.{Block,ControlStructure,Call,Identifier,Literal,Method,MethodReturn,Return,StoredNode,FieldIdentifier}
 import scala.collection.mutable.{HashMap,Queue}
 
 def getNode(node:StoredNode): String = {
@@ -23,6 +23,8 @@ def getNode(node:StoredNode): String = {
           mr.code
         case r: Return =>
           r.code
+        case f: FieldIdentifier =>
+          f.code
         case _ =>
           "Unknown node type"
       }
@@ -83,6 +85,88 @@ class CfgGenerator {
 
 }
 
+// def findNextStatement(
+//     currentNode: StoredNode,
+//     nameHashMap: HashMap[StoredNode, String],
+//     hashMap: HashMap[StoredNode, List[StoredNode]],
+//     specificOperator: Option[String] = None
+// ): List[StoredNode] = {
+
+//   val operators = Set("=", "==", ">=", "<=", ">", "<", "!=")
+
+//   def findValidNodes(nodes: List[StoredNode], acc: List[StoredNode]): List[StoredNode] = {
+//     nodes match {
+//       case Nil => acc
+//       case head :: tail =>
+//         val name = nameHashMap.get(head)
+
+//         if (name.exists(n => n == "RET")) {
+//           return List.empty[StoredNode]
+//         }
+
+//         if (name.exists(n => operators.exists(op => n.contains(op)))) {
+//           if (specificOperator.forall(op => name.exists(n => n.contains(op)))) {
+//             findValidNodes(tail, head :: acc)
+//           } else {
+//             findValidNodes(tail, acc)
+//           }
+//         } else {
+//           val nextNodes = hashMap.get(head).getOrElse(List.empty)
+//           findValidNodes(nextNodes, acc)
+//         }
+//     }
+//   }
+
+//   val initialNodes = hashMap.get(currentNode).getOrElse(List.empty)
+//   findValidNodes(initialNodes, List.empty).reverse
+// }
+
+// def findNextStatement(
+//     currentNode: StoredNode,
+//     nameHashMap: HashMap[StoredNode, String],
+//     hashMap: HashMap[StoredNode, List[StoredNode]],
+//     specificOperator: Option[String] = None
+// ): List[StoredNode] = {
+
+//   val operators = Set("=", "==", ">=", "<=", ">", "<", "!=")
+
+//   def isOperatorInParentheses(name: String): Boolean = {
+//     // 检查操作符是否在括号内
+//     val parenthesesPattern = """\(([^()]*)\)""".r
+//     parenthesesPattern.findAllMatchIn(name).exists { m =>
+//       operators.exists(op => m.group(1).contains(op))
+//     }
+//   }
+
+//   def findValidNodes(nodes: List[StoredNode], acc: List[StoredNode]): List[StoredNode] = {
+//     nodes match {
+//       case Nil => acc
+//       case head :: tail =>
+//         val name = nameHashMap.get(head)
+
+//         if (name.exists(n => n == "RET")) {
+//           return List.empty[StoredNode]
+//         }
+
+//         // 检查当前名称是否包含操作符，并且在括号外
+//         if (name.exists(n => operators.exists(op => n.contains(op)) && !isOperatorInParentheses(n))) {
+//           if (specificOperator.forall(op => name.exists(n => n.contains(op) && !isOperatorInParentheses(n)))) {
+//             findValidNodes(tail, head :: acc)
+//           } else {
+//             findValidNodes(tail, acc)
+//           }
+//         } else {
+//           val nextNodes = hashMap.get(head).getOrElse(List.empty)
+//           findValidNodes(nextNodes, acc)
+//         }
+//     }
+//   }
+
+//   val initialNodes = hashMap.get(currentNode).getOrElse(List.empty)
+//   findValidNodes(initialNodes, List.empty).reverse
+// }
+
+
 def findNextStatement(
     currentNode: StoredNode,
     nameHashMap: HashMap[StoredNode, String],
@@ -91,6 +175,15 @@ def findNextStatement(
 ): List[StoredNode] = {
 
   val operators = Set("=", "==", ">=", "<=", ">", "<", "!=")
+
+  def hasOperatorOutsideParentheses(name: String): Boolean = {
+    // 检查操作符是否不在括号内
+    val parenthesesPattern = """\(([^()]*)\)""".r
+    val parts = parenthesesPattern.split(name)
+
+    // 检查括号外的部分是否包含操作符
+    parts.exists(part => operators.exists(op => part.contains(op)))
+  }
 
   def findValidNodes(nodes: List[StoredNode], acc: List[StoredNode]): List[StoredNode] = {
     nodes match {
@@ -102,8 +195,9 @@ def findNextStatement(
           return List.empty[StoredNode]
         }
 
-        if (name.exists(n => operators.exists(op => n.contains(op)))) {
-          if (specificOperator.forall(op => name.exists(n => n.contains(op)))) {
+        // 检查当前名称是否包含不在括号内的操作符
+        if (name.exists(n => hasOperatorOutsideParentheses(n))) {
+          if (specificOperator.forall(op => name.exists(n => n.contains(op))) ) {
             findValidNodes(tail, head :: acc)
           } else {
             findValidNodes(tail, acc)
@@ -119,13 +213,27 @@ def findNextStatement(
   findValidNodes(initialNodes, List.empty).reverse
 }
 
-
 def findStartNode(nameHashMap:HashMap[StoredNode,String],hashMap:HashMap[StoredNode,  List[StoredNode]]):StoredNode = {
   val emptyNodeOpt = nameHashMap.find { case (_, value) => value == "<empty>" }
   emptyNodeOpt match {
     case Some((node, _)) => node
   }
 }
+
+def generateHashMapForSkippingLoop(
+    currentNode: StoredNode,
+    nameHashMap:HashMap[StoredNode,String],
+    hashMap1:HashMap[StoredNode,  List[StoredNode]],
+    hashMap:HashMap[StoredNode, List[StoredNode]]
+): StoredNode = {
+  val nextNodes = hashMap1(currentNode)
+  if(nameHashMap(currentNode) == "Unknown node type"){
+    return nextNodes(1)
+  }else{
+    return generateHashMapForSkippingLoop(nextNodes.head,nameHashMap,hashMap1,hashMap)
+  }
+}
+
 
 def generateHashMap(
     currentNode: StoredNode,
@@ -134,11 +242,90 @@ def generateHashMap(
     hashMap:HashMap[StoredNode, List[StoredNode]]
 ): HashMap[StoredNode, List[StoredNode]] = {
   val nextNodes = findNextStatement(currentNode,nameHashMap,hashMap1)
-  hashMap(currentNode) = nextNodes
-  nextNodes.foreach{ node =>
+  if (nameHashMap(currentNode).contains("__iter__")){
+    val node = generateHashMapForSkippingLoop(nextNodes.head,nameHashMap,hashMap1,hashMap)
+    if(!nameHashMap(node).contains("=")){
+      hashMap(currentNode) = findNextStatement(node,nameHashMap,hashMap1)
+    }else{
+      hashMap(currentNode) = List(node)
+    }
     generateHashMap(node,nameHashMap, hashMap1,hashMap)
+  }else{
+    hashMap(currentNode) = nextNodes
+    nextNodes.foreach{ node =>
+      generateHashMap(node,nameHashMap, hashMap1,hashMap)
+    }
   }
   hashMap
+}
+
+def removeNoAssignment(
+    nameHashMap:HashMap[StoredNode,String],
+    hashMap2:HashMap[StoredNode, List[StoredNode]]
+): HashMap[StoredNode, List[StoredNode]] = {
+  val filteredHashMap = hashMap2.filter { case (key, _) =>
+    nameHashMap.get(key).exists(_.contains("=")) || nameHashMap(key) == "<empty>"
+  }
+  val cleanedHashMap = filteredHashMap.mapValues { list =>
+    list.filter(value => nameHashMap.get(value).exists(_.contains("=")))
+  }
+  val result = HashMap(cleanedHashMap.toSeq: _*)
+  result
+}
+
+
+// def removeDoubleAssignment(
+//     nameHashMap:HashMap[StoredNode,String],
+//     hashMap2:HashMap[StoredNode, List[StoredNode]]
+// ): HashMap[StoredNode, List[StoredNode]] = {
+//   hashMap2.foreach{(key,values) =>
+//     values.foreach{ value =>
+//       val valStr = nameHashMap(value)
+//       if(valStr.count(_ == '=') > 1 && !valStr.contains("==")){
+//         val substituteNode = hashMap2(value).head
+//         val newHashMap = hashMap2.map{ case(key,values) =>
+//           val newKey = if(key == value) substituteNode else key
+//           val newValue = values.map{ node =>
+//             if(node == value) substituteNode else node
+//           }
+//           newKey -> newValue
+//         }
+//         return removeDoubleAssignment(nameHashMap,newHashMap)
+//       }
+//     }
+//   }
+//   hashMap2
+// }
+
+def removeDoubleAssignment(
+    nameHashMap: HashMap[StoredNode, String],
+    hashMap2: HashMap[StoredNode, List[StoredNode]]
+): HashMap[StoredNode, List[StoredNode]] = {
+
+  def hasTwoNonConsecutiveEqualsOutsideParentheses(valStr: String): Boolean = {
+    val outsideParenthesesPattern = """(?<!\([^)]*)=(?![^()]*\))""".r
+    val equalsOutside = outsideParenthesesPattern.findAllIn(valStr).toList
+
+    equalsOutside.length >= 2
+  }
+
+  hashMap2.foreach { (key, values) =>
+    values.foreach { value =>
+      val valStr = nameHashMap(value)
+      if (hasTwoNonConsecutiveEqualsOutsideParentheses(valStr) && !valStr.contains("==")) {
+        val substituteNode = hashMap2(value).head
+        val newHashMap = hashMap2.map { case (key, values) =>
+          val newKey = if (key == value) substituteNode else key
+          val newValue = values.map { node =>
+            if (node == value) substituteNode else node
+          }
+          newKey -> newValue
+        }
+        return removeDoubleAssignment(nameHashMap, newHashMap)
+      }
+    }
+  }
+  hashMap2
 }
 
 def getLineNumber(node:StoredNode): Int = {
@@ -204,17 +391,26 @@ def getWorklist(
 
 def getDoubleSide(input: String): (String, List[String]) = {
   val pattern = """(\w+)\s*([=><!]=?|[+\-*/]=?)\s*(.*)""".r
+  val rangePattern = """(\w+)\s*=\s*range\((\d+)\)""".r
+  val methodPattern = """(\w+(\.\w+)?\s*\(\))""".r
   if (input.trim == "<empty>") {
     return ("",List())
   }
 
   input match {
+    case rangePattern(variable, number) =>
+      (variable, List(s"range($number)"))
     case pattern(left, _, right) =>
-      val rightParts = right.replace("(", "").replace(")", "")
-                            .split(",")
-                            .map(_.trim)
-                            .toList
-      (left, rightParts)
+      right match {
+        case methodPattern(methodCall) =>
+          (left, List(methodCall))
+        case _ =>
+          val rightParts = right.replace("(", "").replace(")", "")
+                                .split(",")
+                                .map(_.trim)
+                                .toList
+          (left, rightParts)
+      }
     case _ =>
       throw new IllegalArgumentException(s"Invalid input: $input")
   }
@@ -427,9 +623,39 @@ def conditionalConstant(
 
   val startNode:StoredNode = findStartNode(nameHashMap,hashMap1)
   val newHashMap = HashMap[StoredNode,  List[StoredNode]]()
-  val hashMap = generateHashMap(startNode,nameHashMap,hashMap1,newHashMap)
-  val (finalList,numberHashMap) = conditionalConstant(startNode,nameHashMap,hashMap)
-  printConstant(numberHashMap,finalList)
+  val hashMap2 = generateHashMap(startNode,nameHashMap,hashMap1,newHashMap)
+  hashMap2.foreach{ (key,value) =>
+    print(nameHashMap(key))
+    print(" -> ")
+    value.foreach{ node =>
+      print(nameHashMap(node))
+      print("|")
+    }
+    println()
+    if(nameHashMap(key).contains("tmp21.join")){
+      println(value)
+    }
+  }
+  // val hashMap3 = removeDoubleAssignment(nameHashMap,hashMap2)
+
+  // hashMap3.foreach{ (key,value) =>
+  //   print(nameHashMap.get(key))
+  //   print(" -> ")
+  //   value.foreach{ node =>
+  //     print(nameHashMap.get(node))
+  //     print("|")
+  //   }
+  //   println()
+  // }
+
+
+  // val hashMap = removeNoAssignment(nameHashMap,hashMap3)
+
+
+  // val (finalList,numberHashMap) = conditionalConstant(startNode,nameHashMap,hashMap)
+  // printConstant(numberHashMap,finalList)
+
+
   // numberHashMap.foreach{(key,value) =>
   //   println(s"$key -> ${finalList(value)}")
   // }
