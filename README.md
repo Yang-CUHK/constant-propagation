@@ -16,3 +16,5 @@ The numberList stores the corresponding List[List[String]] of a node.
 The program will automatically print the final constant. If the constant in the middle is needed, you can find it in workList or the key of numberList and get the corresponding List[List[String]] in numberList and then print it using printConstant function.
 
 The checkCondition function is not yet complete and still needs to wait.
+
+Using python3 traverse.py and then input the folder and the output location to do constant propagation.

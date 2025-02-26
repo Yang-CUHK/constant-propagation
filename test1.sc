@@ -4,6 +4,8 @@ import io.shiftleft.semanticcpg.dotgenerator.DotSerializer.{Edge, Graph}
 import io.shiftleft.semanticcpg.language.*
 import io.shiftleft.codepropertygraph.generated.nodes.{Block,ControlStructure,Call,Identifier,Literal,Method,MethodReturn,Return,StoredNode,FieldIdentifier}
 import scala.collection.mutable.{HashMap,Queue}
+import java.io.{File, PrintWriter,FileOutputStream}
+
 
 def getNode(node:StoredNode): String = {
     node match {
@@ -167,50 +169,127 @@ class CfgGenerator {
 // }
 
 
+// def findNextStatement(
+//     currentNode: StoredNode,
+//     nameHashMap: HashMap[StoredNode, String],
+//     hashMap: HashMap[StoredNode, List[StoredNode]],
+//     specificOperator: Option[String] = None
+// ): List[StoredNode] = {
+//   if(nameHashMap(currentNode) == "f = value_tmp97"){
+//     print("->")
+//     println(hashMap(currentNode))
+//     println(nameHashMap(hashMap(currentNode).head))
+//     println(nameHashMap(hashMap(hashMap(currentNode).head).head))
+//     println(hashMap(hashMap(hashMap(currentNode).head).head))
+//     println(nameHashMap(hashMap(hashMap(hashMap(currentNode).head).head).head))
+//     println(hashMap(hashMap(hashMap(hashMap(currentNode).head).head).head))
+//     println(nameHashMap(hashMap(hashMap(hashMap(hashMap(currentNode).head).head).head).head))
+//     println(hashMap(hashMap(hashMap(hashMap(hashMap(currentNode).head).head).head).head))
+//     println(nameHashMap(hashMap(hashMap(hashMap(hashMap(hashMap(currentNode).head).head).head).head).head))
+//   }
+
+//   val operators = Set("=", "==", ">=", "<=", ">", "<", "!=")
+
+//   def hasOperatorOutsideParentheses(name: String): Boolean = {
+//     // 检查操作符是否不在括号内
+//     val parenthesesPattern = """\(([^()]*)\)""".r
+//     val parts = parenthesesPattern.split(name)
+
+//     // 检查括号外的部分是否包含操作符
+//     parts.exists(part => operators.exists(op => part.contains(op)))
+//   }
+
+//   def findValidNodes(nodes: List[StoredNode], acc: List[StoredNode]): List[StoredNode] = {
+//     nodes match {
+//       case Nil => acc
+//       case head :: tail =>
+//         val name = nameHashMap.get(head)
+
+//         if (name.exists(n => n == "RET")) {
+//           return head :: acc
+//         }
+
+//         // 检查当前名称是否包含不在括号内的操作符
+//         if (name.exists(n => hasOperatorOutsideParentheses(n))) {
+//           if (specificOperator.forall(op => name.exists(n => n.contains(op))) ) {
+//             findValidNodes(tail, head :: acc)
+//           } else {
+//             findValidNodes(tail, acc)
+//           }
+//         } else {
+//           val nextNodes = hashMap.get(head).getOrElse(List.empty)
+//           findValidNodes(nextNodes, acc)
+//         }
+//     }
+//   }
+
+//   val initialNodes = hashMap.get(currentNode).getOrElse(List.empty)
+//   findValidNodes(initialNodes, List.empty).reverse
+// }
+
 def findNextStatement(
     currentNode: StoredNode,
     nameHashMap: HashMap[StoredNode, String],
     hashMap: HashMap[StoredNode, List[StoredNode]],
-    specificOperator: Option[String] = None
+    specificOperator: Option[String] = None,
+    visited: Set[StoredNode] = Set.empty  // 添加一个已访问集合
 ): List[StoredNode] = {
 
   val operators = Set("=", "==", ">=", "<=", ">", "<", "!=")
 
-  def hasOperatorOutsideParentheses(name: String): Boolean = {
-    // 检查操作符是否不在括号内
-    val parenthesesPattern = """\(([^()]*)\)""".r
-    val parts = parenthesesPattern.split(name)
+  // def hasOperatorOutsideParentheses(name: String): Boolean = {
+  //   // 检查操作符是否不在括号内
+  //   val parenthesesPattern = """\(([^()]*)\)""".r
+  //   val parts = parenthesesPattern.split(name)
 
-    // 检查括号外的部分是否包含操作符
-    parts.exists(part => operators.exists(op => part.contains(op)))
+  //   // 检查括号外的部分是否包含操作符
+  //   parts.exists(part => operators.exists(op => part.contains(op)))
+  // }
+  def hasOperatorOutsideParentheses(name: String): Boolean = {
+    val operators = Set("=", "==", ">=", "<=", ">", "<", "!=")
+    var inParentheses = 0
+
+    for (char <- name) {
+      char match {
+        case '(' => inParentheses += 1
+        case ')' => inParentheses -= 1
+        case _ if operators.exists(op => name.startsWith(op, name.indexOf(char))) && inParentheses == 0 =>
+          return true
+        case _ => // do nothing
+      }
+    }
+    false
   }
 
-  def findValidNodes(nodes: List[StoredNode], acc: List[StoredNode]): List[StoredNode] = {
+  def findValidNodes(nodes: List[StoredNode], acc: List[StoredNode], visited: Set[StoredNode]): List[StoredNode] = {
     nodes match {
       case Nil => acc
+      case head :: tail if visited.contains(head) => 
+        // 如果已访问，直接跳过
+        findValidNodes(tail, acc, visited)
       case head :: tail =>
         val name = nameHashMap.get(head)
 
         if (name.exists(n => n == "RET")) {
-          return List.empty[StoredNode]
+          return head :: acc
         }
 
         // 检查当前名称是否包含不在括号内的操作符
         if (name.exists(n => hasOperatorOutsideParentheses(n))) {
           if (specificOperator.forall(op => name.exists(n => n.contains(op))) ) {
-            findValidNodes(tail, head :: acc)
+            findValidNodes(tail, head :: acc, visited + head)
           } else {
-            findValidNodes(tail, acc)
+            findValidNodes(tail, acc, visited + head)
           }
         } else {
           val nextNodes = hashMap.get(head).getOrElse(List.empty)
-          findValidNodes(nextNodes, acc)
+          findValidNodes(nextNodes, acc, visited + head)  // 递归调用时更新已访问集合
         }
     }
   }
 
   val initialNodes = hashMap.get(currentNode).getOrElse(List.empty)
-  findValidNodes(initialNodes, List.empty).reverse
+  findValidNodes(initialNodes, List.empty, Set.empty).reverse
 }
 
 def findStartNode(nameHashMap:HashMap[StoredNode,String],hashMap:HashMap[StoredNode,  List[StoredNode]]):StoredNode = {
@@ -235,27 +314,64 @@ def generateHashMapForSkippingLoop(
 }
 
 
+// def generateHashMap(
+//     currentNode: StoredNode,
+//     nameHashMap:HashMap[StoredNode,String],
+//     hashMap1:HashMap[StoredNode,  List[StoredNode]],
+//     hashMap:HashMap[StoredNode, List[StoredNode]]
+// ): HashMap[StoredNode, List[StoredNode]] = {
+//   val nextNodes = findNextStatement(currentNode,nameHashMap,hashMap1)
+//   if (nameHashMap(currentNode).contains("__iter__")){
+//     val node = generateHashMapForSkippingLoop(nextNodes.head,nameHashMap,hashMap1,hashMap)
+//     if(!nameHashMap(node).contains("=")){
+//       hashMap(currentNode) = findNextStatement(node,nameHashMap,hashMap1)
+//     }else{
+//       hashMap(currentNode) = List(node)
+//     }
+//     generateHashMap(node,nameHashMap, hashMap1,hashMap)
+//   }else{
+//     hashMap(currentNode) = nextNodes
+//     nextNodes.foreach{ node =>
+//       generateHashMap(node,nameHashMap, hashMap1,hashMap)
+//     }
+//   }
+//   hashMap
+// }
+
 def generateHashMap(
     currentNode: StoredNode,
-    nameHashMap:HashMap[StoredNode,String],
-    hashMap1:HashMap[StoredNode,  List[StoredNode]],
-    hashMap:HashMap[StoredNode, List[StoredNode]]
+    nameHashMap: HashMap[StoredNode, String],
+    hashMap1: HashMap[StoredNode, List[StoredNode]],
+    hashMap: HashMap[StoredNode, List[StoredNode]],
+    visited: Set[StoredNode] = Set.empty // 新增参数跟踪已访问的节点
 ): HashMap[StoredNode, List[StoredNode]] = {
-  val nextNodes = findNextStatement(currentNode,nameHashMap,hashMap1)
-  if (nameHashMap(currentNode).contains("__iter__")){
-    val node = generateHashMapForSkippingLoop(nextNodes.head,nameHashMap,hashMap1,hashMap)
-    if(!nameHashMap(node).contains("=")){
-      hashMap(currentNode) = findNextStatement(node,nameHashMap,hashMap1)
-    }else{
+  // print(nameHashMap(currentNode))
+  
+  if (visited.contains(currentNode)) {
+    return hashMap // 如果当前节点已经访问过，返回已有的 hashMap，避免死循环
+  }
+
+  val nextNodes = findNextStatement(currentNode, nameHashMap, hashMap1)
+  val updatedVisited = visited + currentNode // 更新访问集合
+
+  // print("->")
+  // println(nextNodes)
+
+  if (nameHashMap(currentNode).contains("__iter__")) {
+    val node = generateHashMapForSkippingLoop(nextNodes.head, nameHashMap, hashMap1, hashMap)
+    if (!nameHashMap(node).contains("=")) {
+      hashMap(currentNode) = findNextStatement(node, nameHashMap, hashMap1)
+    } else {
       hashMap(currentNode) = List(node)
     }
-    generateHashMap(node,nameHashMap, hashMap1,hashMap)
-  }else{
+    generateHashMap(node, nameHashMap, hashMap1, hashMap, updatedVisited) // 传递已访问节点
+  } else {
     hashMap(currentNode) = nextNodes
-    nextNodes.foreach{ node =>
-      generateHashMap(node,nameHashMap, hashMap1,hashMap)
+    nextNodes.foreach { node =>
+      generateHashMap(node, nameHashMap, hashMap1, hashMap, updatedVisited) // 传递已访问节点
     }
   }
+  
   hashMap
 }
 
@@ -390,31 +506,70 @@ def getWorklist(
 }
 
 def getDoubleSide(input: String): (String, List[String]) = {
-  val pattern = """(\w+)\s*([=><!]=?|[+\-*/]=?)\s*(.*)""".r
-  val rangePattern = """(\w+)\s*=\s*range\((\d+)\)""".r
-  val methodPattern = """(\w+(\.\w+)?\s*\(\))""".r
-  if (input.trim == "<empty>") {
-    return ("",List())
+  val operators = Set("=", "==", ">=", "<=", ">", "<", "!=")
+
+  def findOperatorOutsideParentheses(name: String): Option[(String, Int, Int)] = {
+    var inParentheses = 0
+    var operatorPosition = -1
+    var operatorFound: Option[String] = None
+
+    for (i <- name.indices) {
+      name(i) match {
+        case '(' => inParentheses += 1
+        case ')' => inParentheses -= 1
+        case char if operators.exists(op => name.startsWith(op, i)) && inParentheses == 0 =>
+          operatorFound = Some(name.substring(i, i + operators.find(op => name.startsWith(op, i)).get.length))
+          operatorPosition = i
+          return Some((operatorFound.get, operatorPosition, inParentheses))
+        case _ => // do nothing
+      }
+    }
+    None
   }
 
-  input match {
-    case rangePattern(variable, number) =>
-      (variable, List(s"range($number)"))
-    case pattern(left, _, right) =>
-      right match {
-        case methodPattern(methodCall) =>
-          (left, List(methodCall))
-        case _ =>
-          val rightParts = right.replace("(", "").replace(")", "")
-                                .split(",")
-                                .map(_.trim)
-                                .toList
-          (left, rightParts)
-      }
-    case _ =>
+  if (input.trim == "<empty>") {
+    return ("", List())
+  }
+
+  val operatorInfo = findOperatorOutsideParentheses(input)
+
+  operatorInfo match {
+    case Some((operator, opIndex, _)) =>
+      val left = input.substring(0, opIndex).trim
+      val right = input.substring(opIndex + operator.length).trim
+      (left, List(right))
+
+    case None =>
       throw new IllegalArgumentException(s"Invalid input: $input")
   }
 }
+
+// def getDoubleSide(input: String): (String, List[String]) = {
+//   val pattern = """(\w+)\s*([=><!]=?|[+\-*/]=?)\s*(.*)""".r
+//   val rangePattern = """(\w+)\s*=\s*range\((\d+)\)""".r
+//   val methodPattern = """(\w+(\.\w+)?\s*\(\))""".r
+//   if (input.trim == "<empty>") {
+//     return ("",List())
+//   }
+
+//   input match {
+//     case rangePattern(variable, number) =>
+//       (variable, List(s"range($number)"))
+//     case pattern(left, _, right) =>
+//       right match {
+//         case methodPattern(methodCall) =>
+//           (left, List(methodCall))
+//         case _ =>
+//           val rightParts = right.replace("(", "").replace(")", "")
+//                                 .split(",")
+//                                 .map(_.trim)
+//                                 .toList
+//           (left, rightParts)
+//       }
+//     case _ =>
+//       throw new IllegalArgumentException(s"Invalid input: $input")
+//   }
+// }
 
 def getNumberHashMap(
     nameHashMap:HashMap[StoredNode,String],
@@ -588,24 +743,110 @@ def conditionalConstant(
   (finalList,numberHashMap)
 }
 
+// @main def exec(cpgFile: String, outFile: String) = {
+//   importCode(inputPath = cpgFile, projectName = "test")
+//   // Get the main function
+//   val method = cpg.method("main").next()
+//   val cfg = new CfgGenerator().generate(method)
+//   val hashMap1 = HashMap[StoredNode,  List[StoredNode]]()
+//   val nameHashMap = HashMap[StoredNode,String]()
+
+
+//   cfg.edges.foreach{edge =>
+//     val srcNode = edge.src
+//     val dstNode = edge.dst
+//     nameHashMap.get(srcNode) match{
+//       case Some(src) =>
+//       case None =>
+//         nameHashMap(srcNode) = getNode(srcNode)
+//     }
+
+
+
+//     nameHashMap.get(dstNode) match{
+//       case Some(src) =>
+//       case None =>
+//         nameHashMap(dstNode) = getNode(dstNode)
+//     }
+
+//     hashMap1.get(srcNode) match {
+//       case Some(nodes) =>
+//         val updateNodes = nodes :+ edge.dst
+//         hashMap1(srcNode) = updateNodes
+//       case None =>
+//         val newValue = List(edge.dst)
+//         hashMap1(srcNode) = newValue
+//       }
+//   }
+
+//   // println("hello")
+
+//   val startNode:StoredNode = findStartNode(nameHashMap,hashMap1)
+//   // println("hello1")
+//   val newHashMap = HashMap[StoredNode,  List[StoredNode]]()
+//   // println("hello2")
+//   val hashMap2 = generateHashMap(startNode,nameHashMap,hashMap1,newHashMap)
+//   // println("hello3")
+
+//   // hashMap2.foreach{ (key,value) =>
+//   //   print(nameHashMap.get(key))
+//   //   print(" -> ")
+//   //   value.foreach{ node =>
+//   //     print(nameHashMap.get(node))
+//   //     print("|")
+//   //   }
+//   //   println()
+//   // }
+
+//   // println("hello4")
+  
+//   val hashMap3 = removeDoubleAssignment(nameHashMap,hashMap2)
+
+//   // hashMap3.foreach{ (key,value) =>
+//   //   print(nameHashMap.get(key))
+//   //   print(" -> ")
+//   //   value.foreach{ node =>
+//   //     print(nameHashMap.get(node))
+//   //     print("|")
+//   //   }
+//   //   println()
+//   // }
+
+
+//   val hashMap = removeNoAssignment(nameHashMap,hashMap3)
+
+
+//   val (finalList,numberHashMap) = conditionalConstant(startNode,nameHashMap,hashMap)
+//   // printConstant(numberHashMap,finalList)
+
+
+//   numberHashMap.foreach{(key,value) =>
+//     println(s"$key -> ${finalList(value)}")
+//   }
+// }
+
 @main def exec(cpgFile: String, outFile: String) = {
   importCode(inputPath = cpgFile, projectName = "test")
+  
+  // Prepare output
+  val file = new File(outFile)
+  val writer = new PrintWriter(new FileOutputStream(file, true)) // append mode
   // Get the main function
   val method = cpg.method("main").next()
   val cfg = new CfgGenerator().generate(method)
-  val hashMap1 = HashMap[StoredNode,  List[StoredNode]]()
-  val nameHashMap = HashMap[StoredNode,String]()
+  val hashMap1 = HashMap[StoredNode, List[StoredNode]]()
+  val nameHashMap = HashMap[StoredNode, String]()
 
-  cfg.edges.foreach{edge =>
+  cfg.edges.foreach { edge =>
     val srcNode = edge.src
     val dstNode = edge.dst
-    nameHashMap.get(srcNode) match{
+    nameHashMap.get(srcNode) match {
       case Some(src) =>
       case None =>
         nameHashMap(srcNode) = getNode(srcNode)
     }
 
-    nameHashMap.get(dstNode) match{
+    nameHashMap.get(dstNode) match {
       case Some(src) =>
       case None =>
         nameHashMap(dstNode) = getNode(dstNode)
@@ -618,45 +859,27 @@ def conditionalConstant(
       case None =>
         val newValue = List(edge.dst)
         hashMap1(srcNode) = newValue
-      }
-  }
-
-  val startNode:StoredNode = findStartNode(nameHashMap,hashMap1)
-  val newHashMap = HashMap[StoredNode,  List[StoredNode]]()
-  val hashMap2 = generateHashMap(startNode,nameHashMap,hashMap1,newHashMap)
-  hashMap2.foreach{ (key,value) =>
-    print(nameHashMap(key))
-    print(" -> ")
-    value.foreach{ node =>
-      print(nameHashMap(node))
-      print("|")
-    }
-    println()
-    if(nameHashMap(key).contains("tmp21.join")){
-      println(value)
     }
   }
-  // val hashMap3 = removeDoubleAssignment(nameHashMap,hashMap2)
 
-  // hashMap3.foreach{ (key,value) =>
-  //   print(nameHashMap.get(key))
-  //   print(" -> ")
-  //   value.foreach{ node =>
-  //     print(nameHashMap.get(node))
-  //     print("|")
-  //   }
-  //   println()
-  // }
+  val startNode: StoredNode = findStartNode(nameHashMap, hashMap1)
+  val newHashMap = HashMap[StoredNode, List[StoredNode]]()
+  val hashMap2 = generateHashMap(startNode, nameHashMap, hashMap1, newHashMap)
+  val hashMap3 = removeDoubleAssignment(nameHashMap, hashMap2)
+  val hashMap = removeNoAssignment(nameHashMap, hashMap3)
+
+  val (finalList, numberHashMap) = conditionalConstant(startNode, nameHashMap, hashMap)
 
 
-  // val hashMap = removeNoAssignment(nameHashMap,hashMap3)
+  // Output constants of cpgFile first
+  writer.println(s"Constants of $cpgFile:")
+  numberHashMap.foreach { (key, value) =>
+    writer.println(s"$key -> ${finalList(value)}")
+  }
 
+  // Add a blank line
+  writer.println()
 
-  // val (finalList,numberHashMap) = conditionalConstant(startNode,nameHashMap,hashMap)
-  // printConstant(numberHashMap,finalList)
-
-
-  // numberHashMap.foreach{(key,value) =>
-  //   println(s"$key -> ${finalList(value)}")
-  // }
+  // Close the writer
+  writer.close()
 }

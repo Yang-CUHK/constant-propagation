@@ -1,7 +1,7 @@
 import os
 import subprocess
 
-def bfs_traverse(directory):
+def bfs_traverse(directory,outFile):
     queue = [directory]
 
     while queue:
@@ -14,17 +14,17 @@ def bfs_traverse(directory):
                 with open(path, 'r') as file:
                     if 'def main' in file.read():
                         print(f"Found: {path}")
-                        call_test_script(path)
+                        call_test_script(path,outFile)
                         print()
                         print()
 
-def call_test_script(file_path):
+def call_test_script(file_path,outFile):
     # 构建调用命令
     cmd = [
         "joern",
         "--script", "test1.sc",
         "--param", f"cpgFile={file_path}",
-        "--param", "outFile=c.txt"
+        "--param", f"outFile={outFile}"
     ]
     # 执行命令
     subprocess.run(cmd)
@@ -32,4 +32,8 @@ def call_test_script(file_path):
 if __name__ == "__main__":
     # 获取用户输入的目录路径
     directory_path = input("请输入要遍历的文件夹路径: ")
-    bfs_traverse(directory_path)
+    outFile = input("请输入输出路径: ")
+    bfs_traverse(directory_path,outFile)
+
+
+

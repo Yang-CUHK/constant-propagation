@@ -1,0 +1,39 @@
+Constants of /home/yang/Desktop/summer/test_case/numpy/numpy/_core/code_generators/generate_ufunc_api.py:
+args -> List(parser.parse_args())
+parser -> List(argparse.ArgumentParser())
+tmp14 -> List(os.path)
+
+Constants of /home/yang/Desktop/summer/test_case/numpy/numpy/_core/code_generators/genapi.py:
+tagname -> List(sys.argv[1])
+order_file -> List(sys.argv[2])
+functions -> List(get_api_functions(tagname, order_file))
+tmp102 -> List(functions.__iter__())
+m -> List(hashlib.md5(tagname, usedforsecurity = False))
+
+Constants of /home/yang/Desktop/summer/test_case/numpy/numpy/_core/code_generators/generate_numpy_api.py:
+args -> List(parser.parse_args())
+tmp21 -> List(os.path)
+parser -> List(argparse.ArgumentParser())
+
+Constants of /home/yang/Desktop/summer/test_case/numpy/numpy/_core/code_generators/verify_c_api_version.py:
+args -> List(parser.parse_args())
+parser -> List(argparse.ArgumentParser())
+
+Constants of /home/yang/Desktop/summer/test_case/numpy/numpy/_core/code_generators/generate_umath.py:
+args -> List(parser.parse_args())
+filename -> List(__file__)
+code -> List()
+parser -> List(argparse.ArgumentParser())
+tmp93 -> List(os.path)
+f -> List(value_tmp97)
+enter_tmp95 -> List(manager_tmp94.__enter__)
+outfile -> List('__umath_generated.c')
+value_tmp97 -> List(enter_tmp95())
+manager_tmp94 -> List(open(outfile, 'w'))
+exit_tmp96 -> List(manager_tmp94.__exit__)
+
+Constants of /home/yang/Desktop/summer/test_case/numpy/numpy/_core/code_generators/generate_umath_doc.py:
+args -> List(parser.parse_args())
+parser -> List(argparse.ArgumentParser())
+tmp15 -> List(os.path)
+

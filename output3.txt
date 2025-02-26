@@ -1,0 +1,9 @@
+len(sys.argv) != 3
+RET
+<empty>
+Constants of /home/yang/Desktop/summer/test_case/numpy/numpy/linalg/lapack_lite/make_lite.py:
+len(sys.argv) -> List(3)
+
+Constants of /home/yang/Desktop/summer/test_case/numpy/numpy/linalg/lapack_lite/make_lite.py:
+len(sys.argv) -> List(3)
+
